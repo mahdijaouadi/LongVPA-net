@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from data_preprocess.get_ibkr_ohlc import get_ohlc
 import asyncio
 from pathlib import Path
+from config.settings import *
 current_dir = os.path.dirname(os.path.abspath(__file__))
 class DataPipeline:
     def __init__(self,daily_mainwindow,monthly_mainwindow,spy_mainwindow,volume_spikewindow):
@@ -58,7 +59,7 @@ class DataPipeline:
         )
         fig.update_layout(yaxis=dict(range=[data['low'].min(), data['high'].max()]))
         fig.update_layout(xaxis=dict(range=[data.index.min(), data.index.max()]))
-        img_bytes = fig.to_image(format='jpg',width=448,height=448,scale=1)
+        img_bytes = fig.to_image(format='jpg',width=CHART_WIDTH,height=CHART_HEIGHT,scale=1)
         img = Image.open(io.BytesIO(img_bytes))
         return img
 
@@ -66,7 +67,7 @@ class DataPipeline:
         img = np.array(img)
         img = img[90:375, 50:400]
         img = Image.fromarray(img)
-        img = img.resize((224, 224))
+        img = img.resize(CHART_RESIZE_DIMS)
         img=np.array(img)
         img = (img / 255.0)  # Keep as float for processing
         # img = (img * 255).astype(np.uint8)  # Convert to uint8 for storage
@@ -113,8 +114,8 @@ class DataPipeline:
         return sub_daily_data, sub_monthly_data, sub_spy_data
 
 if __name__ == "__main__":
-    mode='validation'
-    pipeline=DataPipeline(200,30,30,10)
+    mode='train'
+    pipeline=DataPipeline(daily_mainwindow=DAILY_MAINWINDOW,monthly_mainwindow=MONTHLY_MAINWINDOW,spy_mainwindow=SPY_MAINWINDOW,volume_spikewindow=VOLUME_SPIKEWINDOW)
     Path(os.path.join(current_dir, "..","..","data",mode,"chart_1d")).mkdir(parents=True, exist_ok=True)
     Path(os.path.join(current_dir, "..","..","data",mode,"chart_1mo")).mkdir(parents=True, exist_ok=True)
     Path(os.path.join(current_dir, "..","..","data",mode,"spy_seq")).mkdir(parents=True, exist_ok=True)
@@ -126,17 +127,27 @@ if __name__ == "__main__":
             "end_date": datetime.now(),
             "barSizeSetting": "1 day"
         }))
-    spy_data=pipeline.format_price_data(ohlc_data=spy_data,atr_return_horizon=1)
-    entries=[]
+    spy_data=pipeline.format_price_data(ohlc_data=spy_data,atr_return_horizon=ATR_RETURN_HORIZON_SPY)
+    import json
 
+    index_path = os.path.join(current_dir, "..", "..", "data", mode, "index.json")
+    if os.path.exists(index_path):
+        with open(index_path, "r") as f:
+            try:
+                entries = json.load(f)
+                print('here')
+            except Exception:
+                entries = []
+    else:
+        entries = []
     for i in range(len(df_tickers)):
         ticker=df_tickers["ticker"].iloc[i]
         start_date=df_tickers["entry"].iloc[i]
         end_date=df_tickers["exit"].iloc[i]
         if start_date=='infinity':
-            start_date='2005-01-01'
+            start_date=DEFAULT_START_DATE
         if end_date=='infinity':
-            end_date=datetime.now().strftime("%Y-%m-%d")
+            end_date=DEFAULT_END_DATE
         if np.busday_count(datetime.strptime(start_date, "%Y-%m-%d").date(), datetime.strptime(end_date, "%Y-%m-%d").date())>pipeline.daily_mainwindow:
             daily_data=asyncio.run(get_ohlc( {
                     "ticker": ticker,
@@ -152,7 +163,7 @@ if __name__ == "__main__":
                     "end_date": datetime.strptime(end_date, "%Y-%m-%d"),
                     "barSizeSetting": "1 month"
                 }))
-                daily_data=pipeline.format_price_data(ohlc_data=daily_data,atr_return_horizon=20)
+                daily_data=pipeline.format_price_data(ohlc_data=daily_data,atr_return_horizon=ATR_RETURN_HORIZON_DAILY)
                 monthly_data=pipeline.format_price_data(ohlc_data=monthly_data)
                 daily_data=pipeline.get_volumespike_signals(ohlc_data=daily_data)
         
