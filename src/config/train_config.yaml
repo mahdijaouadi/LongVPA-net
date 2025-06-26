@@ -1,0 +1,13 @@
+
+epochs: 100
+learning_rate: 0.001
+batch_size: 32
+model_params:
+  input_dim: 10
+  hidden_dim: 256
+  num_layers: 2
+  output_dim: 1
+file_paths:
+  train_data: "data/processed/train_data.csv"
+  val_data: "data/processed/val_data.csv"
+  model_save_path: "models/best_model.pth"

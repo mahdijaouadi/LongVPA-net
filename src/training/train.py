@@ -11,7 +11,15 @@ from model.model_architecture import *
 from torch.utils.data import Dataset, DataLoader, Sampler
 import json
 import random
+import yaml
+
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
+layers=config["model_params"]["num_layers"]
+output_size=config["model_params"]["output_dim"]
+model=MyModel(layers,output_size).to(device)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -124,14 +132,14 @@ def get_predictions(x,loader):
     true_labels=torch.tensor([])
     model.eval()
     for chart_1d, chart_1mo, spy_seq, target in loader:
-        with torch.no_grad():
-            y_hat=model(chart_1d.to(device),chart_1mo.to(device),spy_seq.to(device)).to('cpu')   
-        predictions=torch.cat((predictions,y_hat),dim=0)
-        true_labels=torch.cat((true_labels,target),dim=0)
-        torch.cuda.empty_cache()
-    model.train()
-    return true_labels,predictions
-
+EPOCHS=config["epochs"]
+criterion=nn.MSELoss()
+train_loss_hist=[]
+val_loss_hist=[]
+val_mae_hist=[]
+training_mae_hist=[]
+optimizer=torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
+best_mae=1000
 EPOCHS=100
 criterion=nn.MSELoss()
 train_loss_hist=[]
