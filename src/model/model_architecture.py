@@ -71,13 +71,13 @@ class Resnet(nn.Module):
         out=torch.flatten(out,1)
         return out
 class MyModel(nn.Module):
-    def __init__(self,layers,output_size,device='cpu'):
+    def __init__(self,layers,hidden_lstm_size,num_lstm_layers,output_size,device='cpu'):
         super(MyModel,self).__init__()
         self.device=device
         self.bottleneck_1d=nn.Conv2d(3,1,kernel_size=3,stride=1,padding=1,bias=False)
         self.bottleneck_1mo=nn.Conv2d(3,1,kernel_size=3,stride=1,padding=1,bias=False)
-        self.hidden_size=64
-        self.num_layers=3
+        self.hidden_size=hidden_lstm_size
+        self.num_layers=num_lstm_layers
         self.lstm=nn.LSTM(input_size=1,hidden_size=self.hidden_size,num_layers=self.num_layers,batch_first=True,dropout=0.5)
         #Resnet layers
         self.resnet=Resnet(layers)

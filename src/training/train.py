@@ -11,20 +11,18 @@ from model.model_architecture import *
 from torch.utils.data import Dataset, DataLoader, Sampler
 import json
 import random
+from config.train_config import *
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
-layers=[3,4,6,3]
-output_size=1
-model=MyModel(layers,output_size).to(device)
+model=MyModel(layers=resnet_layers,hidden_lstm_size=hidden_lstm_size,num_lstm_layers=num_lstm_layers,output_size=output_size).to(device)
 # model = model.half()
 model.apply(init_weights)
 model_path = os.path.join(current_dir, "..", "models", "model.pth")
 if os.path.exists(model_path):
     model.load_state_dict(torch.load(model_path,weights_only=False))
-best_model=MyModel(layers,output_size)
-# best_model = best_model.half()
+best_model=MyModel(layers=resnet_layers,hidden_lstm_size=hidden_lstm_size,num_lstm_layers=num_lstm_layers,output_size=output_size)
 
 best_model_path = os.path.join(current_dir, "..", "models", "best_model.pth")
 if os.path.exists(best_model_path):
@@ -132,13 +130,10 @@ def get_predictions(x,loader):
     model.train()
     return true_labels,predictions
 
-EPOCHS=100
 criterion=nn.MSELoss()
-train_loss_hist=[]
-val_loss_hist=[]
 val_mae_hist=[]
 training_mae_hist=[]
-optimizer=torch.optim.Adam(model.parameters(), lr=1e-4)
+optimizer=torch.optim.Adam(model.parameters(), lr=learning_rate)
 best_mae=1000
 for epoch in range(EPOCHS):
     print(epoch)
