@@ -58,21 +58,20 @@ class DataPipeline:
         )
         fig.update_layout(yaxis=dict(range=[data['low'].min(), data['high'].max()]))
         fig.update_layout(xaxis=dict(range=[data.index.min(), data.index.max()]))
-        img_bytes=fig.to_image(format='jpg')
-        img=Image.open(io.BytesIO(img_bytes))
+        img_bytes = fig.to_image(format='jpg',width=448,height=448,scale=1)
+        img = Image.open(io.BytesIO(img_bytes))
         return img
 
     def img_preprocess(self,img):
-        img = img.resize((448,448))
-        img= np.array(img)
-        img=img[90:375,50:400]
+        img = np.array(img)
+        img = img[90:375, 50:400]
         img = Image.fromarray(img)
-        img = img.resize((448,448))
-        img= np.array(img)
-        img=img/255.0
-        img=torch.from_numpy(img).to(torch.float32)
-        img = img.permute(2,0,1)
-
+        img = img.resize((224, 224))
+        img=np.array(img)
+        img = (img / 255.0)  # Keep as float for processing
+        # img = (img * 255).astype(np.uint8)  # Convert to uint8 for storage
+        img = torch.from_numpy(img).to(torch.float16)
+        img = img.permute(2, 0, 1)
         return img
     def format_price_data(self,ohlc_data,atr_return_horizon=None):
         ohlc_data.reset_index(inplace=True, drop=False)
@@ -113,75 +112,75 @@ class DataPipeline:
 
         return sub_daily_data, sub_monthly_data, sub_spy_data
 
+if __name__ == "__main__":
+    pipeline=DataPipeline(200,30,30,10)
+    Path(os.path.join(current_dir, "..","..","data","chart_1d")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data","chart_1mo")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data","spy_seq")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data","target")).mkdir(parents=True, exist_ok=True)
+    df_tickers=pd.read_csv("s&p_tickers.csv")
+    spy_data=asyncio.run(get_ohlc( {
+            "ticker": "SPY",
+            "start_date": datetime.strptime("2005-01-01", "%Y-%m-%d"),
+            "end_date": datetime.now(),
+            "barSizeSetting": "1 day"
+        }))
+    spy_data=pipeline.format_price_data(ohlc_data=spy_data,atr_return_horizon=1)
+    entries=[]
 
-pipeline=DataPipeline(200,30,30,10)
-Path(os.path.join(current_dir, "..","..","data","chart_1d")).mkdir(parents=True, exist_ok=True)
-Path(os.path.join(current_dir, "..","..","data","chart_1mo")).mkdir(parents=True, exist_ok=True)
-Path(os.path.join(current_dir, "..","..","data","spy_seq")).mkdir(parents=True, exist_ok=True)
-Path(os.path.join(current_dir, "..","..","data","target")).mkdir(parents=True, exist_ok=True)
-df_tickers=pd.read_csv("s&p_tickers.csv")
-spy_data=asyncio.run(get_ohlc( {
-        "ticker": "SPY",
-        "start_date": datetime.strptime("2005-01-01", "%Y-%m-%d"),
-        "end_date": datetime.now(),
-        "barSizeSetting": "1 day"
-    }))
-spy_data=pipeline.format_price_data(ohlc_data=spy_data,atr_return_horizon=1)
-entries=[]
+    for i in range(len(df_tickers)):
+        ticker=df_tickers["ticker"].iloc[i]
+        start_date=df_tickers["entry"].iloc[i]
+        end_date=df_tickers["exit"].iloc[i]
+        if start_date=='infinity':
+            start_date='2005-01-01'
+        if end_date=='infinity':
+            end_date=datetime.now().strftime("%Y-%m-%d")
+        if np.busday_count(datetime.strptime(start_date, "%Y-%m-%d").date(), datetime.strptime(end_date, "%Y-%m-%d").date())>pipeline.daily_mainwindow:
+            daily_data=asyncio.run(get_ohlc( {
+                    "ticker": ticker,
+                    "start_date": datetime.strptime(start_date, "%Y-%m-%d"),
+                    "end_date": datetime.strptime(end_date, "%Y-%m-%d"),
+                    "barSizeSetting": "1 day"
+                }))
+            print(f"\033[92m{ticker}\033[0m \033[93m{len(daily_data)}\033[0m")
+            if len(daily_data)>pipeline.daily_mainwindow:
+                monthly_data=asyncio.run(get_ohlc( {
+                    "ticker": ticker,
+                    "start_date": datetime.strptime("2005-01-01", "%Y-%m-%d"),
+                    "end_date": datetime.strptime(end_date, "%Y-%m-%d"),
+                    "barSizeSetting": "1 month"
+                }))
+                daily_data=pipeline.format_price_data(ohlc_data=daily_data,atr_return_horizon=20)
+                monthly_data=pipeline.format_price_data(ohlc_data=monthly_data)
+                daily_data=pipeline.get_volumespike_signals(ohlc_data=daily_data)
+        
+                print(ticker)
+                print(start_date)
+                print(end_date)
+                for i in range(len(daily_data)-pipeline.daily_mainwindow):
+                    sub_daily_data, sub_monthly_data, sub_spy_data=pipeline.generate_temporal_subsets(daily_data=daily_data, monthly_data=monthly_data, spy_data=spy_data,i=i)
+                    if sub_daily_data['volume_spike'].iloc[len(sub_daily_data)-1]==1 and len(sub_spy_data)==pipeline.spy_mainwindow:
+                        chart_1d=pipeline.img_preprocess(pipeline.create_chart(sub_daily_data))
+                        chart_1mo=pipeline.img_preprocess(pipeline.create_chart(sub_monthly_data))
+                        spy_sequential=sub_spy_data['chg_perc_ATR'].values
+                        spy_sequential=torch.from_numpy(spy_sequential).to(torch.float32)
 
-for i in range(len(df_tickers)):
-    ticker=df_tickers["ticker"].iloc[i]
-    start_date=df_tickers["entry"].iloc[i]
-    end_date=df_tickers["exit"].iloc[i]
-    if start_date=='infinity':
-        start_date='2005-01-01'
-    if end_date=='infinity':
-        end_date=datetime.now().strftime("%Y-%m-%d")
-    if np.busday_count(datetime.strptime(start_date, "%Y-%m-%d").date(), datetime.strptime(end_date, "%Y-%m-%d").date())>pipeline.daily_mainwindow:
-        daily_data=asyncio.run(get_ohlc( {
-                "ticker": ticker,
-                "start_date": datetime.strptime(start_date, "%Y-%m-%d"),
-                "end_date": datetime.strptime(end_date, "%Y-%m-%d"),
-                "barSizeSetting": "1 day"
-            }))
-        print(f"\033[92m{ticker}\033[0m \033[93m{len(daily_data)}\033[0m")
-        if len(daily_data)>pipeline.daily_mainwindow:
-            monthly_data=asyncio.run(get_ohlc( {
-                "ticker": ticker,
-                "start_date": datetime.strptime("2005-01-01", "%Y-%m-%d"),
-                "end_date": datetime.strptime(end_date, "%Y-%m-%d"),
-                "barSizeSetting": "1 month"
-            }))
-            daily_data=pipeline.format_price_data(ohlc_data=daily_data,atr_return_horizon=20)
-            monthly_data=pipeline.format_price_data(ohlc_data=monthly_data)
-            daily_data=pipeline.get_volumespike_signals(ohlc_data=daily_data)
-    
-            print(ticker)
-            print(start_date)
-            print(end_date)
-            for i in range(len(daily_data)-pipeline.daily_mainwindow):
-                sub_daily_data, sub_monthly_data, sub_spy_data=pipeline.generate_temporal_subsets(daily_data=daily_data, monthly_data=monthly_data, spy_data=spy_data,i=i)
-                chart_1d=pipeline.img_preprocess(pipeline.create_chart(sub_daily_data))
-                chart_1mo=pipeline.img_preprocess(pipeline.create_chart(sub_monthly_data))
-                spy_sequential=sub_spy_data['chg_perc_ATR'].values
-                spy_sequential=torch.from_numpy(spy_sequential).to(torch.float32)
+                        target=torch.tensor([sub_daily_data['chg_perc_ATR'].iloc[len(sub_daily_data)-1]]).float()
+                        print(f"\033[92m{sub_daily_data['chg_perc_ATR'].iloc[-1]}\033[0m")
+                        print(f"\032[92m{sub_daily_data['volume_spike'].iloc[len(sub_daily_data)-1]}\032[0m")
+                        sample_id = f"{ticker}_{start_date}_{end_date}_{i}"
+                        torch.save(chart_1d, os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"))
+                        torch.save(chart_1mo, os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"))
+                        torch.save(spy_sequential, os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"))
+                        torch.save(target, os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"))
 
-                target=torch.tensor([sub_daily_data['chg_perc_ATR'].iloc[len(sub_daily_data)-1]]).float()
-
-                sample_id = f"{ticker}_{start_date}_{end_date}_{i}"
-                torch.save(chart_1d, os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"))
-                torch.save(chart_1mo, os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"))
-                torch.save(spy_sequential, os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"))
-                torch.save(target, os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"))
-
-                entries.append({
-                    "id": sample_id,
-                    "chart_1d": os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"),
-                    "chart_1mo": os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"),
-                    "spy_seq": os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"),
-                    "target": os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"),
-                })
-                break
-            break
-with open(os.path.join(current_dir, "..","..","data","index.json"), "w") as f:
-    json.dump(entries, f, indent=2)
+                        entries.append({
+                            "id": sample_id,
+                            "chart_1d": os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"),
+                            "chart_1mo": os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"),
+                            "spy_seq": os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"),
+                            "target": os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"),
+                        })
+                        with open(os.path.join(current_dir, "..","..","data","index.json"), "w") as f:
+                            json.dump(entries, f, indent=2)
