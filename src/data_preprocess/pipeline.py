@@ -113,12 +113,13 @@ class DataPipeline:
         return sub_daily_data, sub_monthly_data, sub_spy_data
 
 if __name__ == "__main__":
+    mode='validation'
     pipeline=DataPipeline(200,30,30,10)
-    Path(os.path.join(current_dir, "..","..","data","chart_1d")).mkdir(parents=True, exist_ok=True)
-    Path(os.path.join(current_dir, "..","..","data","chart_1mo")).mkdir(parents=True, exist_ok=True)
-    Path(os.path.join(current_dir, "..","..","data","spy_seq")).mkdir(parents=True, exist_ok=True)
-    Path(os.path.join(current_dir, "..","..","data","target")).mkdir(parents=True, exist_ok=True)
-    df_tickers=pd.read_csv("s&p_tickers.csv")
+    Path(os.path.join(current_dir, "..","..","data",mode,"chart_1d")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data",mode,"chart_1mo")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data",mode,"spy_seq")).mkdir(parents=True, exist_ok=True)
+    Path(os.path.join(current_dir, "..","..","data",mode,"target")).mkdir(parents=True, exist_ok=True)
+    df_tickers=pd.read_csv(f"s&p_tickers_{mode}.csv")
     spy_data=asyncio.run(get_ohlc( {
             "ticker": "SPY",
             "start_date": datetime.strptime("2005-01-01", "%Y-%m-%d"),
@@ -170,17 +171,17 @@ if __name__ == "__main__":
                         print(f"\033[92m{sub_daily_data['chg_perc_ATR'].iloc[-1]}\033[0m")
                         print(f"\032[92m{sub_daily_data['volume_spike'].iloc[len(sub_daily_data)-1]}\032[0m")
                         sample_id = f"{ticker}_{start_date}_{end_date}_{i}"
-                        torch.save(chart_1d, os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"))
-                        torch.save(chart_1mo, os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"))
-                        torch.save(spy_sequential, os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"))
-                        torch.save(target, os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"))
+                        torch.save(chart_1d, os.path.join(current_dir, "..","..","data",mode,"chart_1d",f"{sample_id}.pt"))
+                        torch.save(chart_1mo, os.path.join(current_dir, "..","..","data",mode,"chart_1mo",f"{sample_id}.pt"))
+                        torch.save(spy_sequential, os.path.join(current_dir, "..","..","data",mode,"spy_seq",f"{sample_id}.pt"))
+                        torch.save(target, os.path.join(current_dir, "..","..","data",mode,"target",f"{sample_id}.pt"))
 
                         entries.append({
                             "id": sample_id,
-                            "chart_1d": os.path.join(current_dir, "..","..","data","chart_1d",f"{sample_id}.pt"),
-                            "chart_1mo": os.path.join(current_dir, "..","..","data","chart_1mo",f"{sample_id}.pt"),
-                            "spy_seq": os.path.join(current_dir, "..","..","data","spy_seq",f"{sample_id}.pt"),
-                            "target": os.path.join(current_dir, "..","..","data","target",f"{sample_id}.pt"),
+                            "chart_1d": os.path.join(current_dir, "..","..","data",mode,"chart_1d",f"{sample_id}.pt"),
+                            "chart_1mo": os.path.join(current_dir, "..","..","data",mode,"chart_1mo",f"{sample_id}.pt"),
+                            "spy_seq": os.path.join(current_dir, "..","..","data",mode,"spy_seq",f"{sample_id}.pt"),
+                            "target": os.path.join(current_dir, "..","..","data",mode,"target",f"{sample_id}.pt"),
                         })
-                        with open(os.path.join(current_dir, "..","..","data","index.json"), "w") as f:
+                        with open(os.path.join(current_dir, "..","..","data",mode,"index.json"), "w") as f:
                             json.dump(entries, f, indent=2)

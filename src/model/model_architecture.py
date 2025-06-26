@@ -39,7 +39,7 @@ class Resnet(nn.Module):
     def __init__(self,layers):
         super(Resnet,self).__init__()
         self.in_channels=64
-        self.conv=nn.Conv2d(3,self.in_channels,kernel_size=7,stride=2,padding=3,bias=False)
+        self.conv=nn.Conv2d(2,self.in_channels,kernel_size=7,stride=2,padding=3,bias=False)
         self.bn= nn.BatchNorm2d(self.in_channels)
         self.maxpool=nn.MaxPool2d(kernel_size=3,stride=2,padding=1) 
         self.layer1=self._make_layer(layers[0],64,1)
@@ -83,20 +83,18 @@ class MyModel(nn.Module):
         self.resnet=Resnet(layers)
 
 
-        self.fc=nn.Linear(512*Block.expansion,output_size)
+        self.fc=nn.Linear(2112,output_size)
 
-    def forward(self, inputs):
-        chart_1d=torch.stack([t[0] for t in inputs]).to(self.device)
-        chart_1mo=torch.stack([t[1] for t in inputs]).to(self.device)
-        sequential_spy=torch.stack([t[2] for t in inputs]).to(self.device)
+    def forward(self, chart_1d,chart_1mo,sequential_spy):
         chart_1d_out=self.bottleneck_1d(chart_1d)
         chart_1mo_out=self.bottleneck_1mo(chart_1mo)
+ 
         mix_chart = torch.cat((chart_1d_out, chart_1mo_out), dim=1)
+        
         mix_chart_out=self.resnet(mix_chart)
         sequential_spy_out, (hidden, cell) = self.lstm(sequential_spy)
         sequential_spy_out=sequential_spy_out[:,-1,:]
         out = torch.cat((mix_chart_out, sequential_spy_out), dim=1)
-
         out=self.fc(out)
         return out
 def init_weights(m):

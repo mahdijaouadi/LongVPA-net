@@ -197,3 +197,4 @@ notebooks
 .pth
 .pkl
 data/
+models/
