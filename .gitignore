@@ -198,3 +198,4 @@ notebooks
 .pkl
 data/
 models/
+weights/

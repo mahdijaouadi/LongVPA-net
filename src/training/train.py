@@ -20,12 +20,12 @@ print(device)
 model=MyModel(layers=resnet_layers,hidden_lstm_size=hidden_lstm_size,num_lstm_layers=num_lstm_layers,output_size=output_size).to(device)
 # model = model.half()
 model.apply(init_weights)
-model_path = os.path.join(current_dir, "..", "models", "model.pth")
+model_path = os.path.join(current_dir, "..", "weights", "model.pth")
 if os.path.exists(model_path):
     model.load_state_dict(torch.load(model_path,weights_only=False))
 best_model=MyModel(layers=resnet_layers,hidden_lstm_size=hidden_lstm_size,num_lstm_layers=num_lstm_layers,output_size=output_size)
 
-best_model_path = os.path.join(current_dir, "..", "models", "best_model.pth")
+best_model_path = os.path.join(current_dir, "..", "weights", "best_model.pth")
 if os.path.exists(best_model_path):
     best_model.load_state_dict(torch.load(best_model_path,weights_only=False))
 else:
